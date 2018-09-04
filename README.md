@@ -12,8 +12,8 @@ After=local-fs.target network.target
 Environment=TZ=Australia/Melbourne
 Environment=SUMO_SOURCE_CATEGORY=dev/your-aws-account/linux/<something>
 Environment=SUMO_SOURCE_NAME=your-system-<something>
-Environment=SUMO_TRUSTED_TIMESTAMP_COLLECTOR_URL=https://collectors.au.sumologic.com/receiver/v1/http/<unique-collector-code>
-Environment=SUMO_UNTRUSTED_TIMESTAMP_COLLECTOR_URL=https://collectors.au.sumologic.com/receiver/v1/http/<unique-collector-code>
+Environment=SUMO_TRUSTED_TIMESTAMP_COLLECTOR_URL=<unique-collector-url>
+Environment=SUMO_UNTRUSTED_TIMESTAMP_COLLECTOR_URL=<unique-collector-url>
 Environment=JOURNAL_EXCLUDE_TRANSPORTS=journal
 Environment=JOURNAL_EXCLUDE_UNITS=log-forwarder.service
 Environment=FORMAT_MESSAGE_INCLUDE_TRANSPORTS=audit
@@ -63,8 +63,8 @@ Standard proxy environment variables are supported.
 
 The SUMO_SOURCE_HOST environment variable can be set to override the
 hostname emitted to sumo, however the default behaviour is to
-auto-detect the hostname from the system itself, using ec2 metadata or
-/etc/hostname in that order.
+auto-detect the hostname from the system itself, using cloud provider metadata or
+/etc/hostname in that order. Both AWS and GCP are supported.
 
 ## Source Category / Source Name Generation
 
@@ -73,7 +73,7 @@ will be generated and override or extend what is specified in
 environment variables. This effectively makes the values specified in
 environment variables the base values, especially for Source Category.
 
-There are 3 kinda of generation behaviour currently supported:
+There are 3 kinds of generation behaviour currently supported:
 
 ### Kubernetes Pods
 
@@ -82,51 +82,35 @@ If an event is from docker, has a `CONTAINER_ID` and the
 API to get the pod name, namespace and owner name (daemonset,
 deployment etc) for that pod.
 
-* Source Category will be set to: $SUMO_SOURCE_CATEGORY/kubernetes/<kubernetes namespace>/<kubernetes owner name / pod name> 
-* Source Name will be set to: <kubernetes pod name>
+* Source Category will be set to: `$SUMO_SOURCE_CATEGORY/kubernetes/<kubernetes namespace>/<kubernetes owner name / pod name>`
+* Source Name will be set to: `<kubernetes pod name>`
 
 ### Docker Containers
 
 If an event is from docker and has a `CONTAINER_ID` but isn't from
 kubernetes, it is treated like a vanilla docker process.
 
-* Source Category will be set to: $SUMO_SOURCE_CATEGORY/docker/<docker container name> 
-# Source Name will be set to: <docker container name>
+* Source Category will be set to: `$SUMO_SOURCE_CATEGORY/docker/<docker container name>`
+* Source Name will be set to: `<docker container name>`
 
 ### Systemd Unit
 
 If an event has `SYSTEMD_SLICE` set and doesn't match the above
 scenarios it is treated as a vanilla systemd process.
 
-* Source Category will be set to: $SUMO_SOURCE_CATEGORY/systemd/<systemd slice name> 
-* Source Name will be set to: <systemd slice name>
+* Source Category will be set to: `$SUMO_SOURCE_CATEGORY/systemd/<systemd slice name>`
+* Source Name will be set to: `<systemd slice name>`
 
 ### Journald Entry
 
 Otherwise an if an event doesn't match any of the above scenarios it
 is treated as a vanilla journald entry.
 
-* Source Category will be set to: $SUMO_SOURCE_CATEGORY/journald/<journal transport name> 
-* Source Name will be set to: <journal transport name>
+* Source Category will be set to: `$SUMO_SOURCE_CATEGORY/journald/<journal transport name> `
+* Source Name will be set to: `<journal transport name>`
 
 ## Timestamp parsing
 
-Because log-forwarder is supposed to be drawing all logs entries from
-a given host, likely from a number of sources as described above, it
-is likely that some of those sources are logging timestamp in
-different ways or not at all.  This creates a problem in sumologic as
-it will by default try and parse a given log event and make it
-searchable with whatever time (in the nominated timezone) that it
-finds. Where it doesn't find a timezone it will apply the default
-timezone for the collector.  As the log-forwarder can't pass source
-specific timezone information to sumologic (not part of the upload
-API) we have simplified down to two classes of sources, sources we can
-'trust' the timestamp of and those we can't.  Trusted log entries are
-those that have a format sumologic supports that includes a timezone,
-and untrusted are entries that should be marked with the receipt
-timestamp in sumologic (so now-ish).  All events can't be marked with
-receipt time as it will subtly change the order of messages for
-transactions that cross host boundaries, this is most important for
-application logs which are luckily a trusted timestamp source so won't
-have this problem.
+Because log-forwarder is supposed to be drawing all logs entries from a given host, likely from a number of sources as described above, it is likely that some of those sources are logging timestamp in different ways or not at all.  This creates a problem in SumoLogic as it will by default try and parse a given log event and make it searchable with whatever time (in the nominated timezone) that it finds. Where it doesn't find a timezone it will apply the default timezone for the collector.  As the log-forwarder can't pass source specific timezone information to SumoLogic (its not part of the upload
+API) we have simplified down to two classes of sources, sources we can 'trust' the timestamp of and those we can't.  Trusted log entries are those that have a format SumoLogic supports that includes a timezone, and untrusted are entries that should be marked with the receipt timestamp in SumoLogic (so now-ish).  All events can't be marked with receipt time as it will subtly change the order of messages for transactions that cross host boundaries, this is most important for application logs which are luckily a trusted timestamp source so won't have this problem.
 
