@@ -1,0 +1,12 @@
+sudo: required
+services: docker
+language: minimal
+branches:
+  only:
+  - master
+script:
+  - make image
+  - make
+  - DOCKER_CONTENT_TRUST=1 docker build --pull -t "bsycorp/log-forwarder:1.0.$TRAVIS_BUILD_NUMBER" -t "bsycorp/log-forwarder:latest" .
+  - docker login -u $DOCKERUSER -p $DOCKERPASS
+  - docker push bsycorp/log-forwarder

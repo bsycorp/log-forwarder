@@ -1,27 +1,36 @@
 # Journald SumoLogic forwarder
 
+[![Build Status](https://travis-ci.org/bsycorp/log-forwarder.svg?branch=master)](https://travis-ci.org/bsycorp/log-forwarder)
+
 Reads journald entries and uploads them to SumoLogic.
 
-Example service file:
+## Quickstart
+
+Use prebuilt images from Dockerhub: https://hub.docker.com/r/bsycorp/log-forwarder/
+Example SystemD service file:
+
 ```
 [Unit]
-Description=journald SumoLogic uploader
-After=local-fs.target network.target
+After=docker.service
 
 [Service]
-Environment=TZ=Australia/Melbourne
-Environment=SUMO_SOURCE_CATEGORY=dev/your-aws-account/linux/<something>
-Environment=SUMO_SOURCE_NAME=your-system-<something>
-Environment=SUMO_TRUSTED_TIMESTAMP_COLLECTOR_URL=<unique-collector-url>
-Environment=SUMO_UNTRUSTED_TIMESTAMP_COLLECTOR_URL=<unique-collector-url>
-Environment=JOURNAL_EXCLUDE_TRANSPORTS=journal
-Environment=JOURNAL_EXCLUDE_UNITS=log-forwarder.service
-Environment=FORMAT_MESSAGE_INCLUDE_TRANSPORTS=audit
-ExecStart=/opt/bin/log-forwarder
-WorkingDirectory=/var/lib/log-forwarder
+ExecStartPre=-/usr/bin/docker rm -f log-forwarder
+ExecStart=/usr/bin/docker run --init --rm --name log-forwarder \
+  -e "SUMO_SOURCE_CATEGORY=dev/your-aws-account/linux/<something>" \
+  -e "SUMO_SOURCE_NAME=your-system-<something>" \
+  -e "SUMO_TRUSTED_TIMESTAMP_COLLECTOR_URL=<unique-collector-url>" \
+  -e "SUMO_UNTRUSTED_TIMESTAMP_COLLECTOR_URL=<unique-collector-url>" \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -v /etc:/etc \
+  -v /var/log/journal:/var/log/journal:ro \
+  -v /var/lib/log-forwarder:/var/lib/log-forwarder \
+  --log-driver none \
+  --network host \
+  "bsycorp/log-forwarder:latest"'
 StateDirectory=log-forwarder
 Restart=always
 RestartSec=1m
+TimeoutStartSec=60
 
 [Install]
 WantedBy=multi-user.target
