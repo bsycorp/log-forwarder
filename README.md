@@ -59,6 +59,9 @@ for a list of valid Journald transports.
   journald transports from collection. Default: empty.
 * JOURNAL_EXCLUDE_UNITS - if set, will exclude messages from the nominated systemd units, useful to exclude the logfwder itself but accepts a comma separated list.
 * FORMAT_MESSAGE_EXCLUDE_UNITS - if set, will disable custom formatting for the nominated systemd units. Default: `docker.service` is excluded by default.
+* SUMO_EXCLUDE_SOURCE_CATEGORIES - A comma separated list of strings which will cause messages to be dropped if they match (by "string contains") a source 
+  category.  For example, a value of `kubernetes/kube-system/weave-net` will prevent weave net messages from being forwarded to Sumo.
+
 
 ### Proxy environment variables
 
