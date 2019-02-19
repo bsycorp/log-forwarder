@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -69,6 +70,11 @@ func main() {
 		log.Println("Excluding systemd units named: ", excludeUnits)
 	}
 
+	excludeSumoCategories := Split(os.Getenv("SUMO_EXCLUDE_SOURCE_CATEGORIES"), ",")
+	if len(excludeSumoCategories) > 0 {
+		log.Println("Excluding messages for sumo source categories: ", excludeSumoCategories)
+	}
+
 MainLoop:
 	for {
 		// Non-blocking check for SIGINT or SIGTERM
@@ -117,8 +123,14 @@ MainLoop:
 					logMessage = FormatLogEntry(ent)
 				}
 
-				//lookup correct buffer for entry, then append msg to that queue
-				getOrCreateActiveBufferForEntry(ent).Append(logMessage)
+				//lookup correct buffer for entry
+				buf := getOrCreateActiveBufferForEntry(ent)
+
+				//check whether category is excluded
+				if !isSumoCategoryExcluded(buf.Metadata.category, excludeSumoCategories) {
+					//append desired msg to that queue
+					buf.Append(logMessage)
+				}
 			}
 			lastCursor = ent.Cursor
 		}
@@ -184,12 +196,20 @@ func getOrCreateActiveBufferForEntry(ent *sdjournal.JournalEntry) *LogBuffer {
 		buffer = &LogBuffer{
 			Metadata: metadata,
 		}
-
 		log.Println("Creating buffer for: ", bufferIdentifier, ", category: ", metadata.category)
 		activeBuffers.Add(bufferIdentifier, buffer, 24*time.Hour)
 	}
 
 	return buffer.(*LogBuffer)
+}
+
+func isSumoCategoryExcluded(category string, excludedCategories []string) bool {
+	for _, ex := range excludedCategories {
+		if strings.Contains(category, ex) {
+			return true
+		}
+	}
+	return false
 }
 
 //returns value representing the correct queue for this entry, used to separate different entry types so they can have different metadata
