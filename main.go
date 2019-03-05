@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/coreos/go-systemd/sdjournal"
 	"github.com/patrickmn/go-cache"
+	"github.com/syntaqx/go-metrics-datadog"
 	"log"
 	"net/http"
 	"os"
@@ -20,6 +21,7 @@ const (
 )
 
 var stateFile = flag.String("statefile", DefaultStateFile, "File to checkpoint log position for resuming.")
+var metricsArg = flag.String("metrics", "none", "metrics provider (none,datadog,prometheus)")
 
 //maintain an expiring map of queues, will look up by queue identifier, inactive queues will be collected by the map
 var activeBuffers = cache.New(24*time.Hour, 24*time.Hour)
@@ -27,8 +29,13 @@ var activeBuffers = cache.New(24*time.Hour, 24*time.Hour)
 func main() {
 	flag.Parse()
 
+	metrics := &Metrics{}
+	metrics.Init()
+	metrics.StartCapture()
+
 	sumoUploader := &SumoUploader{
 		httpClient:                     &http.Client{},
+		Metrics:                        metrics,
 		TrustedTimestampCollectorUrl:   MustGetEnv("SUMO_TRUSTED_TIMESTAMP_COLLECTOR_URL", "SUMO_COLLECTOR_URL"),
 		UntrustedTimestampCollectorUrl: MustGetEnv("SUMO_UNTRUSTED_TIMESTAMP_COLLECTOR_URL", "SUMO_COLLECTOR_URL"),
 	}
@@ -75,8 +82,30 @@ func main() {
 		log.Println("Excluding messages for sumo source categories: ", excludeSumoCategories)
 	}
 
+	// Metrics
+	if *metricsArg == "none" {
+		log.Println("metrics disabled")
+	} else if strings.HasPrefix(*metricsArg, "datadog") {
+		reporter, err := datadog.NewReporter(
+			nil,                 // Metrics registry, or nil for default
+			"127.0.0.1:8125", // DogStatsD UDP address
+			time.Second * 10,       // Update interval
+			datadog.UsePercentiles([]float64{0.25, 0.99}),
+		)
+		if err != nil {
+			log.Fatal(err)
+		}
+		reporter.Client.Namespace = "log-forwarder."
+		//reporter.Client.Tags = append(reporter.Client.Tags, "us-east-1a")
+		go reporter.Flush()
+	} else {
+		log.Fatal("unknown metrics provider: ", *metricsArg)
+	}
+
 MainLoop:
 	for {
+		metrics.MainLoopSpins.Inc(1)
+
 		// Non-blocking check for SIGINT or SIGTERM
 		select {
 		case _ = <-sigCh:
@@ -137,6 +166,7 @@ MainLoop:
 
 		//loop through buffers, start goroutine to check flush, do upload if required and then clear buffer.
 		activeBufferItems := activeBuffers.Items()
+		metrics.NumActiveBuffers.Update(int64(len(activeBufferItems)))
 
 		uploadCh := make(chan int)
 		for _, item := range activeBufferItems {
