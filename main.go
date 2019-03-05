@@ -95,16 +95,21 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
-		reporter.Client.Namespace = "log-forwarder."
+		reporter.Client.Namespace = "log_forwarder."
 		//reporter.Client.Tags = append(reporter.Client.Tags, "us-east-1a")
 		go reporter.Flush()
 	} else {
 		log.Fatal("unknown metrics provider: ", *metricsArg)
 	}
+	var mainLoopLast time.Time
 
 MainLoop:
 	for {
 		metrics.MainLoopSpins.Inc(1)
+		if !mainLoopLast.IsZero() {
+			metrics.MainLoopTime.UpdateSince(mainLoopLast)
+		}
+		mainLoopLast = time.Now()
 
 		// Non-blocking check for SIGINT or SIGTERM
 		select {
@@ -166,7 +171,7 @@ MainLoop:
 
 		//loop through buffers, start goroutine to check flush, do upload if required and then clear buffer.
 		activeBufferItems := activeBuffers.Items()
-		metrics.NumActiveBuffers.Update(int64(len(activeBufferItems)))
+		metrics.BuffersActive.Update(int64(len(activeBufferItems)))
 
 		uploadCh := make(chan int)
 		for _, item := range activeBufferItems {

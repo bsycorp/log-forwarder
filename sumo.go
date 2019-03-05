@@ -90,7 +90,8 @@ func (sumo *SumoUploader) UploadLogEntries(metadata MetadataValues, lines []stri
 	const lineSep = "\n"
 	const requestTimeout = 10 * time.Second
 
-	logData := compress(strings.Join(lines, lineSep))
+	uncompressedLogData := strings.Join(lines, lineSep)
+	logData := compress(uncompressedLogData)
 
 Retry:
 	for attempts := 0; ; /* no condition... */ attempts++ {
@@ -102,7 +103,7 @@ Retry:
 		// ctx, _ := context.WithTimeout(context.Background(), requestTimeout)
 		// TODO: should not be willing to block forever here.
 
-		//uploadStart := time.Now()
+		uploadStart := time.Now()
 
 		collectorURL := sumo.TrustedTimestampCollectorUrl
 		if metadata.trustedTimestamp == false {
@@ -121,26 +122,29 @@ Retry:
 
 		resp, err := sumo.httpClient.Do(req)
 		if err != nil {
-			sumo.Metrics.UploadFailure.Inc(1)
+			sumo.Metrics.BufferUploadFailure.Inc(1)
 			log.Println("Error uploading logs:", err)
 			continue Retry
 		}
 		defer resp.Body.Close()
 		_, err = io.Copy(ioutil.Discard, resp.Body)
 		if err != nil {
-			sumo.Metrics.UploadFailure.Inc(1)
+			sumo.Metrics.BufferUploadFailure.Inc(1)
 			log.Println("Error reading sumo response:", err)
 			continue Retry
 		} else if resp.StatusCode != 200 {
-			sumo.Metrics.UploadFailure.Inc(1)
+			sumo.Metrics.BufferUploadFailure.Inc(1)
 			log.Println("Failed upload to sumo server, status code: ", resp.StatusCode)
 			continue Retry
 		}
-		sumo.Metrics.UploadSuccess.Inc(1)
 
 		// We did it ┣┓웃┏♨❤♨┑유┏┥
-		//uploadTook := time.Since(uploadStart)
-		//log.Printf("Uploaded %d bytes in %s", len(logData), uploadTook.String())
+		sumo.Metrics.BufferUploadSuccess.Inc(1)
+		sumo.Metrics.UploadMessages.Inc(int64(len(lines)))
+		sumo.Metrics.UploadBytesUncompressed.Inc(int64(len(uncompressedLogData)))
+		sumo.Metrics.UploadBytesCompressed.Inc(int64(len(logData)))
+		sumo.Metrics.UploadTime.UpdateSince(uploadStart)
+
 		break
 	}
 }
