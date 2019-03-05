@@ -27,6 +27,7 @@ func (m *Metrics) Init() {
 	m.BuffersActive = metrics.NewGauge()
 	m.BufferUploadSuccess = metrics.NewCounter()
 	m.BufferUploadFailure = metrics.NewCounter()
+	m.MainLoopTime = metrics.NewTimer()
 	m.MainLoopSpins = metrics.NewCounter()
 	m.UploadMessages = metrics.NewCounter()
 	m.UploadBytesUncompressed = metrics.NewCounter()
