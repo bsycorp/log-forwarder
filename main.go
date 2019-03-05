@@ -23,8 +23,13 @@ const (
 var stateFile = flag.String("statefile", DefaultStateFile, "File to checkpoint log position for resuming.")
 var metricsArg = flag.String("metrics", "none", "metrics provider (none,datadog,prometheus)")
 
-//maintain an expiring map of queues, will look up by queue identifier, inactive queues will be collected by the map
-var activeBuffers = cache.New(24*time.Hour, 24*time.Hour)
+const activeBufferExpiry = 24*time.Hour
+const seenCursorExpiry = 10*time.Minute
+
+
+//Maintain an expiring map of queues, will look up by queue identifier, inactive queues will be collected by the map
+var activeBuffers = cache.New(activeBufferExpiry, activeBufferExpiry)
+var seenCursors = cache.New(seenCursorExpiry, seenCursorExpiry)
 
 func main() {
 	flag.Parse()
@@ -164,6 +169,11 @@ MainLoop:
 				if !isSumoCategoryExcluded(buf.Metadata.category, excludeSumoCategories) {
 					//append desired msg to that queue
 					buf.Append(logMessage)
+					err := seenCursors.Add(ent.Cursor, nil, seenCursorExpiry)
+					if err != nil {
+						log.Println("WARNING: processing previously seen cursor: ", ent.Cursor)
+						metrics.DebugDupCursor.Inc(1)
+					}
 				}
 			}
 			lastCursor = ent.Cursor
@@ -186,8 +196,8 @@ MainLoop:
 			}(item, uploadCh)
 		}
 
-		//wait for each of the buffer goroutines flush to finish, fire goroutine for every item even if its doesn't need to flush,
-		//easier to know when we are finished that way,
+		// Wait for each of the buffer goroutines flush to finish, fire goroutine for every item even if its doesn't
+		// need to flush, easier to know when we are finished that way,
 		for range activeBufferItems {
 			// We can block here for some time (actually will wait indefinitely
 			// for the buffer to upload to Sumo) so we do that in the background
@@ -199,12 +209,10 @@ MainLoop:
 			}
 		}
 
-		//TODO Should we close this here? keep one open forever? dunno
-		//finished all the flushing so close channel
 		close(uploadCh)
 
-		//Done buffering entries, so update state file to move cursor, doing here instead of after flushing means we will drop messages on restart rather than duplicate
-		//TODO Is that what we want?
+		// Done buffering entries, so update state file to move cursor, doing here instead of after flushing means we
+		// will drop messages on restart rather than duplicate.
 		err = WriteStateFile(*stateFile, lastCursor)
 		if err != nil {
 			// Not a great failure case, we're going to forget a whole
@@ -232,7 +240,10 @@ func getOrCreateActiveBufferForEntry(ent *sdjournal.JournalEntry) *LogBuffer {
 			Metadata: metadata,
 		}
 		log.Println("Creating buffer for: ", bufferIdentifier, ", category: ", metadata.category)
-		activeBuffers.Add(bufferIdentifier, buffer, 24*time.Hour)
+		err := activeBuffers.Add(bufferIdentifier, buffer, activeBufferExpiry)
+		if err != nil {
+			log.Fatalln("Error creating log buffer for: ", bufferIdentifier, err)
+		}
 	}
 
 	return buffer.(*LogBuffer)
