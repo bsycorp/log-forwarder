@@ -8,6 +8,7 @@ import (
 type Metrics struct {
 	Registry                metrics.Registry
 	DebugDupCursor          metrics.Counter
+	DebugDupLastCursor      metrics.Counter
 	BuffersActive           metrics.Gauge
 	BufferUploadSuccess     metrics.Counter
 	BufferUploadFailure     metrics.Counter
@@ -26,6 +27,7 @@ func (m *Metrics) Init() {
 	metrics.RegisterRuntimeMemStats(m.Registry)
 
 	m.DebugDupCursor = metrics.NewCounter()
+	m.DebugDupLastCursor = metrics.NewCounter()
 	m.BuffersActive = metrics.NewGauge()
 	m.BufferUploadSuccess = metrics.NewCounter()
 	m.BufferUploadFailure = metrics.NewCounter()
@@ -37,6 +39,7 @@ func (m *Metrics) Init() {
 	m.UploadTime = metrics.NewTimer()
 
 	_ = metrics.Register("debug.dup_cursor.count", m.DebugDupCursor)
+	_ = metrics.Register("debug.dup_last_cursor.count", m.DebugDupLastCursor)
 	_ = metrics.Register("buffers.active.gauge", m.BuffersActive)
 	_ = metrics.Register("buffers.upload.success", m.BufferUploadSuccess)
 	_ = metrics.Register("buffers.upload.failure", m.BufferUploadFailure)

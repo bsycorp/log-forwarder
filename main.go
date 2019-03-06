@@ -153,6 +153,9 @@ MainLoop:
 			if err != nil {
 				log.Fatalln(err)
 			}
+			if ent.Cursor == lastCursor {
+				metrics.DebugDupLastCursor.Inc(1)
+			}
 			if eventFilters.Want(ent) {
 				//by default just use the raw message
 				logMessage := ent.Fields["MESSAGE"]
