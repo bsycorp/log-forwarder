@@ -37,7 +37,6 @@ func main() {
 
 	metrics := &Metrics{}
 	metrics.Init()
-	metrics.StartCapture()
 
 	sumoUploader := &SumoUploader{
 		httpClient:                     &http.Client{},
