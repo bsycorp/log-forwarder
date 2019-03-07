@@ -29,6 +29,8 @@ const seenCursorExpiry = 10*time.Minute
 
 //Maintain an expiring map of queues, will look up by queue identifier, inactive queues will be collected by the map
 var activeBuffers = cache.New(activeBufferExpiry, activeBufferExpiry)
+
+//This is for debugging; lets us know if for we're reprocessing log messages for whatever reason.
 var seenCursors = cache.New(seenCursorExpiry, seenCursorExpiry)
 
 func main() {
@@ -154,9 +156,10 @@ MainLoop:
 				log.Fatalln(err)
 			}
 			if ent.Cursor == lastCursor {
-				metrics.DebugDupLastCursor.Inc(1)
-			}
-			if eventFilters.Want(ent) {
+				// Sometimes we get here and actually nothing has happened. If so, ignore
+				// the message and just spin through the rest of the mainloop.
+				metrics.DebugSkippedCursor.Inc(1)
+			} else if eventFilters.Want(ent) {
 				//by default just use the raw message
 				logMessage := ent.Fields["MESSAGE"]
 
@@ -174,6 +177,7 @@ MainLoop:
 					buf.Append(logMessage)
 					err := seenCursors.Add(ent.Cursor, nil, seenCursorExpiry)
 					if err != nil {
+						// Shouldn't happen!
 						log.Println("WARNING: processing previously seen cursor: ", ent.Cursor)
 						metrics.DebugDupCursor.Inc(1)
 					}
