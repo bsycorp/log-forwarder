@@ -83,7 +83,6 @@ func GetMetadataForContainerID(fullContainerID string) (values MetadataValues) {
 		} else {
 			if len(pod.Metadata.OwnerReferences) > 0 {
 				podOwnerName = pod.Metadata.OwnerReferences[0].Name
-				log.Println("Found podOwnerName: " + podOwnerName + " for container: " + containerName)
 			}
 		}
 
@@ -107,7 +106,6 @@ func GetMetadataForContainerID(fullContainerID string) (values MetadataValues) {
 		}
 		if MapKeysContains(container.Labels, kContainerTrustedTimestampName) {
 			metadata.trustedTimestamp = true
-			log.Println("Found trusted timestamp label")
 		}
 	}
 

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/coreos/go-systemd/sdjournal"
 	"github.com/patrickmn/go-cache"
-	"github.com/syntaqx/go-metrics-datadog"
 	"log"
 	"net/http"
 	"os"
@@ -89,25 +88,7 @@ func main() {
 		log.Println("Excluding messages for sumo source categories: ", excludeSumoCategories)
 	}
 
-	// Metrics
-	if *metricsArg == "none" {
-		log.Println("metrics disabled")
-	} else if strings.HasPrefix(*metricsArg, "datadog") {
-		reporter, err := datadog.NewReporter(
-			nil,                 // Metrics registry, or nil for default
-			"127.0.0.1:8125", // DogStatsD UDP address
-			time.Second * 10,       // Update interval
-			datadog.UsePercentiles([]float64{0.25, 0.99}),
-		)
-		if err != nil {
-			log.Fatal(err)
-		}
-		reporter.Client.Namespace = "log_forwarder."
-		//reporter.Client.Tags = append(reporter.Client.Tags, "us-east-1a")
-		go reporter.Flush()
-	} else {
-		log.Fatal("unknown metrics provider: ", *metricsArg)
-	}
+	metrics.Start(*metricsArg)
 	var mainLoopLast time.Time
 
 MainLoop:
@@ -178,7 +159,7 @@ MainLoop:
 					err := seenCursors.Add(ent.Cursor, nil, seenCursorExpiry)
 					if err != nil {
 						// Shouldn't happen!
-						log.Println("WARNING: processing previously seen cursor: ", ent.Cursor)
+						log.Println("Error: processing previously seen cursor: ", ent.Cursor)
 						metrics.DebugDupCursor.Inc(1)
 					}
 				}
@@ -246,7 +227,6 @@ func getOrCreateActiveBufferForEntry(ent *sdjournal.JournalEntry) *LogBuffer {
 		buffer = &LogBuffer{
 			Metadata: metadata,
 		}
-		log.Println("Creating buffer for: ", bufferIdentifier, ", category: ", metadata.category)
 		err := activeBuffers.Add(bufferIdentifier, buffer, activeBufferExpiry)
 		if err != nil {
 			log.Fatalln("Error creating log buffer for: ", bufferIdentifier, err)

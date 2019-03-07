@@ -2,6 +2,9 @@ package main
 
 import (
 	metrics "github.com/rcrowley/go-metrics"
+	"github.com/syntaqx/go-metrics-datadog"
+	"log"
+	"strings"
 	"time"
 )
 
@@ -51,7 +54,31 @@ func (m *Metrics) Init() {
 	_ = metrics.Register("upload.time_ms", m.UploadTime)
 }
 
-func (m *Metrics) StartCapture() {
+func (m *Metrics) Start(metricsArg string) {
+	// Metrics
+	if metricsArg == "none" {
+		log.Println("metrics reporting disabled")
+	} else if strings.HasPrefix(metricsArg, "datadog") {
+		dogStatsdAddr := "127.0.0.1:8125"
+		bits := strings.Split(metricsArg, ",")
+		if len(bits) > 2 {
+			dogStatsdAddr = bits[1]
+		}
+		reporter, err := datadog.NewReporter(
+			nil,              // Metrics registry, or nil for default
+			dogStatsdAddr, // DogStatsD UDP address
+			time.Second*10,   // Update interval
+			datadog.UsePercentiles([]float64{0.25, 0.99}),
+		)
+		if err != nil {
+			log.Fatal(err)
+		}
+		reporter.Client.Namespace = "log_forwarder."
+		go reporter.Flush()
+		log.Println("metrics reporting to dogstatd at: ", dogStatsdAddr)
+	} else {
+		log.Fatal("unknown metrics provider: ", metricsArg)
+	}
 	go metrics.CaptureDebugGCStats(m.Registry, time.Second*5)
 	go metrics.CaptureRuntimeMemStats(m.Registry, time.Second*5)
 }
