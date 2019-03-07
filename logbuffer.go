@@ -1,7 +1,6 @@
 package main
 
 import (
-	"log"
 	"time"
 )
 
@@ -35,10 +34,6 @@ func (buf *LogBuffer) Clear() {
 func (buf *LogBuffer) NeedsFlush() bool {
 	bufferAge := time.Since(buf.Age)
 	r := len(buf.Messages) > 0 && (buf.TotalBytes > MaxBufferBytes || bufferAge > MaxBufferAge)
-	if r {
-		log.Printf("LogBuffer flush: msgs=%d size=%d age=%s\n",
-			len(buf.Messages), buf.TotalBytes, bufferAge)
-	}
 	return r
 }
 

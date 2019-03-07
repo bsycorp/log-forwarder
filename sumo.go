@@ -16,6 +16,7 @@ import (
 
 type SumoUploader struct {
 	httpClient *http.Client
+	Metrics    *Metrics
 
 	//this is the url of a sumo http collector with 'Enabled timestamp parsing' ON
 	//so it will try and parse timestamp in log messages. We can only send messages
@@ -89,7 +90,8 @@ func (sumo *SumoUploader) UploadLogEntries(metadata MetadataValues, lines []stri
 	const lineSep = "\n"
 	const requestTimeout = 10 * time.Second
 
-	logData := compress(strings.Join(lines, lineSep))
+	uncompressedLogData := strings.Join(lines, lineSep)
+	logData := compress(uncompressedLogData)
 
 Retry:
 	for attempts := 0; ; /* no condition... */ attempts++ {
@@ -120,23 +122,29 @@ Retry:
 
 		resp, err := sumo.httpClient.Do(req)
 		if err != nil {
+			sumo.Metrics.BufferUploadFailure.Inc(1)
 			log.Println("Error uploading logs:", err)
 			continue Retry
 		}
 		defer resp.Body.Close()
 		_, err = io.Copy(ioutil.Discard, resp.Body)
 		if err != nil {
+			sumo.Metrics.BufferUploadFailure.Inc(1)
 			log.Println("Error reading sumo response:", err)
 			continue Retry
-		}
-		if resp.StatusCode != 200 {
+		} else if resp.StatusCode != 200 {
+			sumo.Metrics.BufferUploadFailure.Inc(1)
 			log.Println("Failed upload to sumo server, status code: ", resp.StatusCode)
 			continue Retry
 		}
 
 		// We did it ┣┓웃┏♨❤♨┑유┏┥
-		uploadTook := time.Since(uploadStart)
-		log.Printf("Uploaded %d bytes in %s", len(logData), uploadTook.String())
+		sumo.Metrics.BufferUploadSuccess.Inc(1)
+		sumo.Metrics.UploadMessages.Inc(int64(len(lines)))
+		sumo.Metrics.UploadBytesUncompressed.Inc(int64(len(uncompressedLogData)))
+		sumo.Metrics.UploadBytesCompressed.Inc(int64(len(logData)))
+		sumo.Metrics.UploadTime.UpdateSince(uploadStart)
+
 		break
 	}
 }
