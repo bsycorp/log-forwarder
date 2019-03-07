@@ -65,9 +65,9 @@ func (m *Metrics) Start(metricsArg string) {
 			dogStatsdAddr = bits[1]
 		}
 		reporter, err := datadog.NewReporter(
-			nil,              // Metrics registry, or nil for default
-			dogStatsdAddr, // DogStatsD UDP address
-			time.Second*10,   // Update interval
+			m.Registry,        // Metrics registry
+			dogStatsdAddr,     // DogStatsD UDP address
+			time.Second*10,    // Update interval
 			datadog.UsePercentiles([]float64{0.25, 0.99}),
 		)
 		if err != nil {
