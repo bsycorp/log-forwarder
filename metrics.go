@@ -79,6 +79,6 @@ func (m *Metrics) Start(metricsArg string) {
 	} else {
 		log.Fatal("unknown metrics provider: ", metricsArg)
 	}
-	go metrics.CaptureDebugGCStats(m.Registry, time.Second*5)
 	go metrics.CaptureRuntimeMemStats(m.Registry, time.Second*5)
+	// go metrics.CaptureDebugGCStats(m.Registry, time.Second*5)
 }
