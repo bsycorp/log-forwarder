@@ -41,17 +41,17 @@ func (m *Metrics) Init() {
 	m.UploadBytesCompressed = metrics.NewCounter()
 	m.UploadTime = metrics.NewTimer()
 
-	_ = metrics.Register("debug.dup_cursor.count", m.DebugDupCursor)
-	_ = metrics.Register("debug.skipped_cursor.count", m.DebugSkippedCursor)
-	_ = metrics.Register("buffers.active.gauge", m.BuffersActive)
-	_ = metrics.Register("buffers.upload.success", m.BufferUploadSuccess)
-	_ = metrics.Register("buffers.upload.failure", m.BufferUploadFailure)
-	_ = metrics.Register("main_loop_spin.count", m.MainLoopSpins)
-	_ = metrics.Register("main_loop_spin.time_ms", m.MainLoopTime)
-	_ = metrics.Register("upload.messages.count", m.UploadMessages)
-	_ = metrics.Register("upload.bytes.uncompressed.count", m.UploadBytesUncompressed)
-	_ = metrics.Register("upload.bytes.compressed.count", m.UploadBytesCompressed)
-	_ = metrics.Register("upload.time_ms", m.UploadTime)
+	_ = m.Registry.Register("debug.dup_cursor.count", m.DebugDupCursor)
+	_ = m.Registry.Register("debug.skipped_cursor.count", m.DebugSkippedCursor)
+	_ = m.Registry.Register("buffers.active.gauge", m.BuffersActive)
+	_ = m.Registry.Register("buffers.upload.success", m.BufferUploadSuccess)
+	_ = m.Registry.Register("buffers.upload.failure", m.BufferUploadFailure)
+	_ = m.Registry.Register("main_loop_spin.count", m.MainLoopSpins)
+	_ = m.Registry.Register("main_loop_spin.time_ms", m.MainLoopTime)
+	_ = m.Registry.Register("upload.messages.count", m.UploadMessages)
+	_ = m.Registry.Register("upload.bytes.uncompressed.count", m.UploadBytesUncompressed)
+	_ = m.Registry.Register("upload.bytes.compressed.count", m.UploadBytesCompressed)
+	_ = m.Registry.Register("upload.time_ms", m.UploadTime)
 }
 
 func (m *Metrics) Start(metricsArg string) {
