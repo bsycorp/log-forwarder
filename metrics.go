@@ -61,7 +61,7 @@ func (m *Metrics) Start(metricsArg string) {
 	} else if strings.HasPrefix(metricsArg, "datadog") {
 		dogStatsdAddr := "127.0.0.1:8125"
 		bits := strings.Split(metricsArg, ",")
-		if len(bits) > 2 {
+		if len(bits) > 1 {
 			dogStatsdAddr = bits[1]
 		}
 		reporter, err := datadog.NewReporter(
