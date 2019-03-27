@@ -109,17 +109,6 @@ MainLoop:
 		// Look for a new Journal entry
 		r, err := j.Next()
 		if err != nil {
-			// Occasionally, we see:
-			// Mar 26 21:09:38 proxy sh[7632]: 2019/03/26 21:09:38 failed to get realtime timestamp: 99
-			// from sdjournal, a.k.a EADDRNOTAVAIL. Can see this is reported as DEBUG severity in journald code itself.
-			if strings.Contains(err.Error(), "timestamp: 99") {
-				timestampUnavailable += 1
-				if timestampUnavailable < 10 {
-					continue MainLoop
-				} else {
-					log.Fatalln("Persistent error getting timestamp of next journal entry")
-				}
-			}
 			log.Fatalln("Error getting next journal entry: ", err)
 		}
 		timestampUnavailable = 0
@@ -145,10 +134,7 @@ MainLoop:
 		}
 
 		if gotNewJournalEntry {
-			ent, err := j.GetEntry()
-			if err != nil {
-				log.Fatalln(err)
-			}
+			ent := GetEntryWithRetry(j)
 			if ent.Cursor == lastCursor {
 				// Sometimes we get here and actually nothing has happened. If so, ignore
 				// the message and just spin through the rest of the mainloop.
@@ -338,4 +324,26 @@ func MakeTransportList(include []string, exclude []string) []string {
 		transports = ListSubtract(transports, exclude)
 	}
 	return transports
+}
+
+
+// Occasionally, we see:
+// Mar 26 21:09:38 proxy sh[7632]: 2019/03/26 21:09:38 failed to get realtime timestamp: 99
+// from sdjournal, a.k.a EADDRNOTAVAIL. Can see this is reported as DEBUG severity in journald code itself.
+// We wrap this to catch the error
+func GetEntryWithRetry(j *sdjournal.Journal) *sdjournal.JournalEntry {
+	var err error
+	var ent *sdjournal.JournalEntry
+	for retry := 0; retry < 10; retry++ {
+		ent, err = j.GetEntry()
+		if err == nil {
+			return ent
+		}
+		if !strings.Contains(err.Error(), "timestamp: 99") {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	log.Fatalln("Failed to get next journal entry: ", err)
+	return nil // Not reached
 }
