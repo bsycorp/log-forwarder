@@ -89,6 +89,7 @@ func main() {
 
 	metrics.Start(*metricsArg)
 	var mainLoopLast time.Time
+	timestampUnavailable := 0
 
 MainLoop:
 	for {
@@ -108,8 +109,21 @@ MainLoop:
 		// Look for a new Journal entry
 		r, err := j.Next()
 		if err != nil {
+			// Occasionally, we see:
+			// Mar 26 21:09:38 proxy sh[7632]: 2019/03/26 21:09:38 failed to get realtime timestamp: 99
+			// from sdjournal, a.k.a EADDRNOTAVAIL. Can see this is reported as DEBUG severity in journald code itself.
+			if strings.Contains(err.Error(), "timestamp: 99") {
+				timestampUnavailable += 1
+				if timestampUnavailable < 10 {
+					continue MainLoop
+				} else {
+					log.Fatalln("Persistent error getting timestamp of next journal entry")
+				}
+			}
 			log.Fatalln("Error getting next journal entry: ", err)
 		}
+		timestampUnavailable = 0
+
 		gotNewJournalEntry := r > 0
 		if !gotNewJournalEntry {
 			// We're at the end of the journal, so wait on it for a short while
