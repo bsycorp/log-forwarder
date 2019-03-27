@@ -89,7 +89,6 @@ func main() {
 
 	metrics.Start(*metricsArg)
 	var mainLoopLast time.Time
-	timestampUnavailable := 0
 
 MainLoop:
 	for {
@@ -111,7 +110,6 @@ MainLoop:
 		if err != nil {
 			log.Fatalln("Error getting next journal entry: ", err)
 		}
-		timestampUnavailable = 0
 
 		gotNewJournalEntry := r > 0
 		if !gotNewJournalEntry {
