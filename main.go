@@ -16,7 +16,6 @@ import (
 
 const (
 	DefaultStateFile = "log-forwarder.state"
-	JournalWaitTime  = time.Duration(2) * time.Second
 )
 
 var stateFile = flag.String("statefile", DefaultStateFile, "File to checkpoint log position for resuming.")
@@ -53,8 +52,8 @@ func main() {
 		true,
 	})
 
-	lastCursor := ""
-	j := OpenJournal()
+	jr := &JournalReader{}
+	jr.Open(*stateFile)
 
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
@@ -89,6 +88,7 @@ func main() {
 
 	metrics.Start(*metricsArg)
 	var mainLoopLast time.Time
+	var lastCursor string
 
 MainLoop:
 	for {
@@ -105,37 +105,10 @@ MainLoop:
 		default:
 		}
 
-		// Look for a new Journal entry
-		r, err := j.Next()
-		if err != nil {
-			log.Fatalln("Error getting next journal entry: ", err)
-		}
-
-		gotNewJournalEntry := r > 0
-		if !gotNewJournalEntry {
-			// We're at the end of the journal, so wait on it for a short while
-			waitResult := j.Wait(JournalWaitTime)
-
-			// So one of 3 things can happen next:
-			// SD_JOURNAL_NOP        - The journal did not change (timeout)
-			// SD_JOURNAL_APPEND     - New journal entries are available
-			// SD_JOURNAL_INVALIDATE - Journal files were added or removed
-
-			if waitResult == sdjournal.SD_JOURNAL_APPEND {
-				gotNewJournalEntry = true
-			} else if waitResult == sdjournal.SD_JOURNAL_INVALIDATE {
-				// Logs got rotated or some-such thing. We need to call j.Next()
-				// if this happens to reposition, so we'll bounce back up
-				continue MainLoop
-			}
-			// SD_JOURNAL_NOP is ignored
-		}
-
-		if gotNewJournalEntry {
-			ent := GetEntryWithRetry(j)
+		ent := jr.GetNextEntry()
+		if ent != nil {
 			if ent.Cursor == lastCursor {
-				// Sometimes we get here and actually nothing has happened. If so, ignore
-				// the message and just spin through the rest of the mainloop.
+				// Hrm, same cursor? Ok, skip it
 				metrics.DebugSkippedCursor.Inc(1)
 			} else if eventFilters.Want(ent) {
 				//by default just use the raw message
@@ -195,15 +168,6 @@ MainLoop:
 		}
 
 		close(uploadCh)
-
-		// Done buffering entries, so update state file to move cursor, doing here instead of after flushing means we
-		// will drop messages on restart rather than duplicate.
-		err = WriteStateFile(*stateFile, lastCursor)
-		if err != nil {
-			// Not a great failure case, we're going to forget a whole
-			// buffer's worth of logs. Not much to be done though.
-			log.Fatalln("Failed to write state file:", err)
-		}
 	}
 
 	// Don't bother cleaning up or flushing anything.
@@ -281,34 +245,7 @@ func getMetadataForLogEntry(ent *sdjournal.JournalEntry) MetadataValues {
 	return metadataValues
 }
 
-func OpenJournal() *sdjournal.Journal {
-	j, err := sdjournal.NewJournal()
-	if err != nil {
-		log.Fatalln("Could not open journal:", err)
-	}
 
-	// Prevent auto-truncation of log entries at 64k
-	err = j.SetDataThreshold(0)
-	if err != nil {
-		log.Fatalln("Could not set journal data threshold:", err)
-	}
-
-	// Seek to start position
-	startCursor, err := ReadStateFile(*stateFile)
-	if err != nil {
-		log.Fatalln("Failed to open state file: ", err)
-	}
-	if startCursor == "" {
-		log.Println("No last cursor, starting from beginning")
-	} else {
-		log.Println("Seeking to: ", startCursor)
-		err = j.SeekCursor(startCursor)
-		if err != nil {
-			log.Fatalln("Error seeking to cursor: ", err)
-		}
-	}
-	return j
-}
 
 func MakeTransportList(include []string, exclude []string) []string {
 	validTransports := []string{"audit", "driver", "syslog", "journal", "stdout", "kernel"}
@@ -322,26 +259,4 @@ func MakeTransportList(include []string, exclude []string) []string {
 		transports = ListSubtract(transports, exclude)
 	}
 	return transports
-}
-
-
-// Occasionally, we see:
-// Mar 26 21:09:38 proxy sh[7632]: 2019/03/26 21:09:38 failed to get realtime timestamp: 99
-// from sdjournal, a.k.a EADDRNOTAVAIL. Can see this is reported as DEBUG severity in journald code itself.
-// We wrap this to catch the error
-func GetEntryWithRetry(j *sdjournal.Journal) *sdjournal.JournalEntry {
-	var err error
-	var ent *sdjournal.JournalEntry
-	for retry := 0; retry < 10; retry++ {
-		ent, err = j.GetEntry()
-		if err == nil {
-			return ent
-		}
-		if !strings.Contains(err.Error(), "timestamp: 99") {
-			break
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-	log.Fatalln("Failed to get next journal entry: ", err)
-	return nil // Not reached
 }
