@@ -12,7 +12,7 @@ RUN go test -v
 RUN go build -v -o build/log-forwarder
 
 # Run stage
-FROM debian:stretch-slim
+FROM bitnami/minideb:stretch
 # doesnt use pinned version as we rely on content trust
 ENV LANG C.UTF-8
 RUN mkdir -p /var/lib/log-forwarder
