@@ -70,6 +70,16 @@ func (jr *JournalReader) GetNextEntry () (*sdjournal.JournalEntry) {
 func (jr *JournalReader) openJournal() {
 	log.Println("Opening journal")
 
+	if jr.Journal != nil {
+		err := jr.Journal.Close()
+		if err != nil {
+			log.Println("Error closing old journal during reopen: ", err)
+		} else {
+			log.Println("Closed old journal")
+		}
+		jr.Journal = nil
+	}
+
 	j, err := sdjournal.NewJournal()
 	if err != nil {
 		log.Fatalln("Could not open journal:", err)
@@ -91,6 +101,8 @@ func (jr *JournalReader) openJournal() {
 			log.Fatalln("Error seeking to cursor: ", err)
 		}
 	}
+
+	log.Println("Journal opened OK")
 }
 
 func (jr *JournalReader) readStateFile() string {

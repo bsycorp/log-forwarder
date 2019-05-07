@@ -148,6 +148,7 @@ func getKubernetesPodInfo(fullContainerID string) (*Pod, error) {
 	}
 
 	podListBody, err := ioutil.ReadAll(podListResponse.Body)
+	_ = podListResponse.Body.Close()
 	if err != nil {
 		return nil, err
 	}
