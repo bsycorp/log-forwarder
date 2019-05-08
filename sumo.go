@@ -126,13 +126,15 @@ Retry:
 			log.Println("Error uploading logs:", err)
 			continue Retry
 		}
-		defer resp.Body.Close()
 		_, err = io.Copy(ioutil.Discard, resp.Body)
+		_ = resp.Body.Close()
 		if err != nil {
+			// Transport error reading response, don't assume logs were uploaded
 			sumo.Metrics.BufferUploadFailure.Inc(1)
 			log.Println("Error reading sumo response:", err)
 			continue Retry
 		} else if resp.StatusCode != 200 {
+			// HTTP error reading response. Again, assume logs were not uploaded
 			sumo.Metrics.BufferUploadFailure.Inc(1)
 			log.Println("Failed upload to sumo server, status code: ", resp.StatusCode)
 			continue Retry
