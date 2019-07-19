@@ -10,12 +10,12 @@ import (
 )
 
 // Block for up to this long waiting for a journal entry
-const JournalWaitTime  = time.Duration(2) * time.Second
+const JournalWaitTime = time.Duration(2) * time.Second
 
 type JournalReader struct {
 	StateFilePath string
-	Cursor string
-	Journal *sdjournal.Journal
+	Cursor        string
+	Journal       *sdjournal.Journal
 }
 
 func (jr *JournalReader) Open(stateFilePath string) {
@@ -24,7 +24,7 @@ func (jr *JournalReader) Open(stateFilePath string) {
 	jr.openJournal()
 }
 
-func (jr *JournalReader) GetNextEntry () (*sdjournal.JournalEntry) {
+func (jr *JournalReader) GetNextEntry() *sdjournal.JournalEntry {
 	// Look for a new Journal entry
 	r, err := jr.Journal.Next()
 	if err != nil {
@@ -49,13 +49,20 @@ func (jr *JournalReader) GetNextEntry () (*sdjournal.JournalEntry) {
 	// entry waiting for us
 	ent, err := jr.Journal.GetEntry()
 	if err != nil {
-		// We sometimes see errors like: "failed to get realtime timestamp: 99"
-		// from sdjournal, a.k.a EADDRNOTAVAIL.
-		// See also e.g: https://github.com/systemd/systemd-netlogd/pull/15/files
-		// We try re-opening the journal to fix this.
 		if strings.Contains(err.Error(), "timestamp: 99") {
+			// We sometimes see errors like: "failed to get realtime timestamp: 99"
+			// from sdjournal, a.k.a EADDRNOTAVAIL.
+			// See also e.g: https://github.com/systemd/systemd-netlogd/pull/15/files
+			// We try re-opening the journal to fix this.
 			log.Println("warning: GetEntry: ", err)
 			jr.openJournal()
+			return nil
+		} else if strings.Contains(err.Error(), "message field: 74") {
+			// 19/7/2019 - We're also seeing: "failed to read message field: 74", i.e, EBADMSG (errno 74)
+			// when getting message fields.
+			// This seems to be related to journald log corruption (i.e, journald --verify reports errors).
+			// We just emit a warning and otherwise ignore the corrupted message rather than crashing.
+			log.Println("warning: GetEntry: ", err)
 			return nil
 		} else {
 			log.Fatalln("fatal: GetEntry: ", err)
