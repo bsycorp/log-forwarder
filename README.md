@@ -126,3 +126,9 @@ is treated as a vanilla journald entry.
 Because log-forwarder is supposed to be drawing all logs entries from a given host, likely from a number of sources as described above, it is likely that some of those sources are logging timestamp in different ways or not at all.  This creates a problem in SumoLogic as it will by default try and parse a given log event and make it searchable with whatever time (in the nominated timezone) that it finds. Where it doesn't find a timezone it will apply the default timezone for the collector.  As the log-forwarder can't pass source specific timezone information to SumoLogic (its not part of the upload
 API) we have simplified down to two classes of sources, sources we can 'trust' the timestamp of and those we can't.  Trusted log entries are those that have a format SumoLogic supports that includes a timezone, and untrusted are entries that should be marked with the receipt timestamp in SumoLogic (so now-ish).  All events can't be marked with receipt time as it will subtly change the order of messages for transactions that cross host boundaries, this is most important for application logs which are luckily a trusted timestamp source so won't have this problem.
 
+### Enabling trusted timestamps from a service
+
+Currently only kubernetes pods may have trusted timestamps (not docker containers or systemd services).
+
+To send logs to the "trusted timestamp" collector, set an annotation like `com.sumologic/trusted-timestamp=true` on a pod.
+
